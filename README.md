@@ -6,13 +6,10 @@ This is the repository for 2025 winter NC State Gears's project
 - front-end: vue3
 - Back-end: python flask
 - API simulator: Apifox (optional)
-<<<<<<< Updated upstream
 - databases -> RAG databases(data conversion)
 - front-end integration with LLM api(llama) & chat api
-=======
-- rag
->>>>>>> Stashed changes
 - Back-end integration with existing databases
+- connecting LLM with RAG databases
 - poster for gears
 
 ## Schedule
