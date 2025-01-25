@@ -163,7 +163,8 @@ def main():
         question = input("\nQuestion: ")
         if question.lower() == 'quit':
             break
-        
+
+        #todo: 历史记录数据库!
         #情况1：如果有文件数据
         file_path = "./impact.xlsx"
         #记得到时候把文件名也传进去
@@ -212,7 +213,6 @@ def main():
             continue
 
         #情况2：没有文件数据
-        #todo: 历史记录数据库
         prelim_answer = prelim_llm._call(question) # 让llm判断是否需要数据、是分析还是比较
         if prelim_answer == "need_data" or prelim_answer == "need_compare": #需要数据、比较
             documents = retrieve_documents(question, vectorstore, 5)
