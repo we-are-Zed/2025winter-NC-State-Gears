@@ -1,8 +1,13 @@
 from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
 from litellm import completion
+import sqlite3
+from datetime import datetime
 
-def get_llm_response(messages):
+def get_llm_response(messages, context=None):
+    if context:
+        # 将上下文作为系统消息插入到消息列表的开头
+        messages.insert(0, {"content": context, "role": "system"})
     response = completion(
         api_key="sk-DItn6zcaiTeKjRdNulAWsg",
         base_url="http://18.216.253.243:4000/",
@@ -16,7 +21,7 @@ class AnalyzeLLM:
     def __init__(self):
         pass
 
-    def _call(self, prompt: str) -> str:
+    def _call(self, prompt: str, context=None) -> str:
         instruction = """
         You are analyzing and comparing environmental impact data related to electricity production processes. 
         The retrieval will return several results, so there may be useless information.
@@ -50,8 +55,7 @@ class AnalyzeLLM:
             {"content": prompt, "role": "user"}
         ]
         
-        response = get_llm_response(messages)
-        return response
+        return get_llm_response(messages, context)
         
     @property
     def _llm_type(self) -> str:
@@ -95,8 +99,7 @@ class FileLLM:
             {"content": prompt, "role": "user"}
         ]
         
-        response = get_llm_response(messages)
-        return response
+        return get_llm_response(messages)
         
     @property
     def _llm_type(self) -> str:
@@ -106,7 +109,7 @@ class PrelimLLM:
     def __init__(self):
         pass
 
-    def _call(self, prompt: str) -> str:
+    def _call(self, prompt: str, context=None) -> str:
         instruction = """
         You are answering questions related to electricity production processes.
         We have data about the environmental impact of the process in the database. 
@@ -120,8 +123,7 @@ class PrelimLLM:
             {"content": prompt, "role": "user"}
         ]
         
-        response = get_llm_response(messages)
-        return response
+        return get_llm_response(messages, context)
         
     @property
     def _llm_type(self) -> str:
@@ -141,8 +143,49 @@ def process_documents(documents):
         formatted_docs.append(formatted_doc)
     return "\n\n".join(formatted_docs)
 
+class HistoryManager:
+    def __init__(self, db_path='chat_history.db'):
+        self.conn = sqlite3.connect(db_path)
+        self._create_table()
+
+    def _create_table(self):
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS chat_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                question TEXT NOT NULL,
+                file_content TEXT,
+                answer TEXT NOT NULL
+            )
+        ''')
+        self.conn.commit()
+
+    def add_record(self, question, answer, file_content=None):
+        cursor = self.conn.cursor()
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        cursor.execute('''
+            INSERT INTO chat_history (timestamp, question, file_content, answer)
+            VALUES (?, ?, ?, ?)
+        ''', (timestamp, question, file_content, answer))
+        self.conn.commit()
+
+    def get_recent_history(self, limit=5):
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT question, file_content, answer 
+            FROM chat_history 
+            ORDER BY timestamp DESC 
+            LIMIT ?
+        ''', (limit,))
+        return cursor.fetchall()
+
+    def close(self):
+        self.conn.close()
+
 def main():
     persist_directory = "./Process_chroma_db"
+    history_manager = HistoryManager()  # 初始化历史记录管理器
 
     embedding_function = OpenAIEmbeddings(
         api_key="sk-DItn6zcaiTeKjRdNulAWsg",
@@ -162,9 +205,10 @@ def main():
     while True:
         question = input("\nQuestion: ")
         if question.lower() == 'quit':
+            history_manager.close()  # 退出时关闭数据库连接
             break
-
-        #todo: 历史记录数据库!
+        
+        #todo: 历史记录数据库
         #情况1：如果有文件数据
         file_path = "./impact.xlsx"
         #记得到时候把文件名也传进去
@@ -185,12 +229,24 @@ def main():
                     content = file.read()
 
             
+            # 获取最近的历史记录并构建上下文
+            recent_history = history_manager.get_recent_history()
+            context = None
+            if recent_history:
+                context = "Previous conversation history:\n"
+                for record in reversed(recent_history):
+                    question, file_content, answer = record
+                    context += f"Q: {question}\n"
+                    if file_content:
+                        context += f"File data: {file_content}\n"
+                    context += f"A: {answer}\n\n"
+
             file_answer = file_llm._call(content) 
             
             documents = retrieve_documents(file_answer, vectorstore, 1)
             formatted_docs = process_documents(documents)
             prompt = f"question: {question}\n\nuser's data(the second line of data is in the sequence of the ten environmental impacts same as the data in the database):\n{file_answer}\n\nprocesses in the database:\n{formatted_docs}"
-            answer = analyze_llm._call(prompt)
+            answer = analyze_llm._call(prompt, context)
 
             metadata = documents[0].metadata
             name = documents[0].page_content.split(":")[1].split('"')[1].split('"')[0]
@@ -210,15 +266,30 @@ def main():
             #values是数组，表示10个环境影响指标的值，顺序都是写死的，参照代码67行
 
             print(answer) #llm的回答
+            
+            # 添加历史记录
+            history_manager.add_record(question, answer, file_answer)
             continue
 
         #情况2：没有文件数据
-        prelim_answer = prelim_llm._call(question) # 让llm判断是否需要数据、是分析还是比较
+        # 获取最近的历史记录并构建上下文
+        recent_history = history_manager.get_recent_history()
+        context = None
+        if recent_history:
+            context = "Previous conversation history:\n"
+            for record in reversed(recent_history):
+                question, file_content, answer = record
+                context += f"Q: {question}\n"
+                if file_content:
+                    context += f"File data: {file_content}\n"
+                context += f"A: {answer}\n\n"
+
+        prelim_answer = prelim_llm._call(question, context) # 让llm判断是否需要数据、是分析还是比较
         if prelim_answer == "need_data" or prelim_answer == "need_compare": #需要数据、比较
             documents = retrieve_documents(question, vectorstore, 5)
             formatted_docs = process_documents(documents)
             prompt = f"question: {question}\n\nprocesses in the database:\n{formatted_docs}"
-            answer = analyze_llm._call(prompt)
+            answer = analyze_llm._call(prompt, context)
             
             numbers = answer.split('\n')[0]
             number_array = [int(x) for x in numbers.split(',')]
@@ -238,9 +309,15 @@ def main():
 
             answer = '\n'.join(answer.split('\n')[1:]).strip()
             print("\nAnswer:", answer)
+            
+            # 添加历史记录
+            history_manager.add_record(question, answer)
         else:
             #不需要数据，直接回答
             print("\nAnswer:", prelim_answer)
+            
+            # 添加历史记录
+            history_manager.add_record(question, prelim_answer)
 
 if __name__ == "__main__":
     main()
