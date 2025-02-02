@@ -1,0 +1,38 @@
+# 1.user
+
+id
+
+Name
+
+Key
+
+role
+
+
+
+# 2.Chat
+
+chat_id
+
+User_id
+
+Prompts:
+
+Answers:
+
+
+
+
+
+
+
+
+
+接口：
+
+1.post:   注册 <---200:弹窗显示注册成功
+
+2.post：登陆<----200:登陆成功 400:密码不正确
+
+3.post：prompt上传（chat_id为0是新建）chat_id+User_id + prompt <-------- answer + chat_id 
+
