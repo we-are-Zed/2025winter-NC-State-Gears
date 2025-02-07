@@ -6,7 +6,7 @@ def get_llm_response(messages):
     response = completion(
         api_key="sk-DItn6zcaiTeKjRdNulAWsg",
         base_url="http://18.216.253.243:4000/",
-        model="gpt-o1",
+        model="gpt-4o",
         custom_llm_provider="openai",
         messages=messages
     )
