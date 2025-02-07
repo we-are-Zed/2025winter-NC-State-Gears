@@ -6,7 +6,7 @@ def get_llm_response(messages):
     response = completion(
         api_key="sk-DItn6zcaiTeKjRdNulAWsg",
         base_url="http://18.216.253.243:4000/",
-        model="gpt-4o",
+        model="gpt-o1",
         custom_llm_provider="openai",
         messages=messages
     )
@@ -16,7 +16,7 @@ class AnalyzeLLM:
     def __init__(self):
         pass
 
-    def _call(self, prompt: str, context=None) -> str:
+    def _call(self, prompt: str, history=None) -> str:
         instruction = """
         You are analyzing and comparing environmental impact data related to electricity production processes. 
         The retrieval will return several results, so there may be useless information.
@@ -47,11 +47,11 @@ class AnalyzeLLM:
         
         messages = [
             {"content": instruction, "role": "system"},
-            {"content": context, "role": "system"},
+            {"content": history, "role": "system"},
             {"content": prompt, "role": "user"}
         ]
         
-        return get_llm_response(messages, context)
+        return get_llm_response(messages)
         
     @property
     def _llm_type(self) -> str:
@@ -105,7 +105,7 @@ class PrelimLLM:
     def __init__(self):
         pass
 
-    def _call(self, prompt: str, context=None) -> str:
+    def _call(self, prompt: str, history=None) -> str:
         instruction = """
         You are answering questions related to electricity production processes.
         We have data about the environmental impact of the process in the database. 
@@ -116,11 +116,11 @@ class PrelimLLM:
         
         messages = [
             {"content": instruction, "role": "system"},
-            {"content": context, "role": "system"},
+            {"content": history, "role": "system"},
             {"content": prompt, "role": "user"}
         ]
         
-        return get_llm_response(messages, context)
+        return get_llm_response(messages)
         
     @property
     def _llm_type(self) -> str:
